@@ -1,7 +1,7 @@
 # core/document_processor.py
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 from tqdm import tqdm
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
@@ -13,7 +13,7 @@ from config.logging_config import logger
 from models.document import Document, DocumentMetadata, Page, Chunk
 from models.enums import DocumentType
 from exceptions.custom_exceptions import DocumentProcessingError, AzureClientError
-from config.constants import type_mapping
+from config.constants import type_mapping, type_descriptions
 from utils.azure_helpers import AzureDocumentProcessor
 
 class DocumentProcessor:
@@ -38,15 +38,55 @@ class DocumentProcessor:
             logger.error(f"Failed to initialize DocumentProcessor: {str(e)}")
             raise AzureClientError(f"Failed to initialize Azure client: {str(e)}")
 
-    def _detect_document_type(self, text: str) -> DocumentType:
-        """Detect document type using content analysis"""
-        text_lower = text.lower()
+    def _cache_type_embeddings(self) -> None:
+        """Pre-compute and cache embeddings for all document type descriptions"""
+        logger.info("Caching document type embeddings")
+        self.type_embeddings = {}
         
-        for keyword, doc_type in type_mapping.items():
-            if keyword in text_lower:
-                return doc_type
+        try:
+            for doc_type, description in self.type_descriptions.items():
+                embedding = self.embeddings.embed_query(description)
+                self.type_embeddings[doc_type] = np.array(embedding)
+            logger.debug("Successfully cached document type embeddings")
+        except Exception as e:
+            logger.error(f"Failed to cache type embeddings: {str(e)}")
+            raise
+
+    def _detect_document_type(self, text: str) -> Tuple[DocumentType, float]:
+        """
+        Detect document type using semantic similarity with type descriptions
+        Returns tuple of (DocumentType, confidence_score)
+        """
+        logger.debug("Detecting document type using semantic similarity")
+        
+        try:
+            # Get embedding for input text
+            text_embedding = np.array(self.embeddings.embed_query(text))
+            
+            # Calculate similarities with all type descriptions
+            similarities = {}
+            for doc_type, type_embedding in self.type_embeddings.items():
+                similarity = float(cosine_similarity(
+                    text_embedding.reshape(1, -1),
+                    type_embedding.reshape(1, -1)
+                )[0][0])
+                similarities[doc_type] = similarity
+
+            # Find best matching type and confidence score
+            best_type = max(similarities.items(), key=lambda x: x[1])
+            doc_type, confidence = best_type
+
+            # If confidence is too low, fall back to GENERAL type
+            if confidence < 0.3:  # Adjustable threshold
+                logger.debug(f"Low confidence ({confidence:.2f}) for document type detection, using GENERAL")
+                return DocumentType.GENERAL, confidence
                 
-        return DocumentType.GENERAL
+            logger.debug(f"Detected document type {doc_type} with confidence {confidence:.2f}")
+            return doc_type, confidence
+
+        except Exception as e:
+            logger.error(f"Error in document type detection: {str(e)}")
+            return DocumentType.GENERAL, 0.0
 
     async def process_document(self, file_path: str) -> Document:
         """Process a single document and return structured data"""
@@ -75,13 +115,17 @@ class DocumentProcessor:
                     ))
                     logger.debug(f"Processed page {page_num}")
 
-                # Create document metadata
+                # Create document metadata with enhanced type detection
                 file_path_obj = Path(file_path)
+                combined_text = " ".join(page.text for page in pages)
+                doc_type, type_confidence = self._detect_document_type(combined_text)
+                
                 metadata = DocumentMetadata(
                     filename=file_path_obj.name,
                     page_count=len(result.pages),
                     language=self.azure_processor.get_document_language(result),
-                    doc_type=self._detect_document_type(" ".join(page.text for page in pages)),
+                    doc_type=doc_type,
+                    doc_type_confidence=type_confidence,  # Added confidence score
                     processed_date=datetime.now(),
                     confidence_score=self.azure_processor.get_confidence_score(result)
                 )

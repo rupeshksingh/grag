@@ -75,3 +75,51 @@ type_mapping = {
             "evaluation criteria": DocumentType.EVALUATION_CRITERIA,
             "timeline": DocumentType.TIMELINE
         }
+
+type_descriptions = {
+            DocumentType.TECHNICAL_SPECIFICATION: """
+                Technical specifications and detailed system requirements.
+                Contains technical details, system architecture, performance requirements,
+                functionality specifications, integration requirements, and technical standards.
+            """,
+            DocumentType.REQUIREMENTS: """
+                Requirements documentation detailing project needs and expectations.
+                Includes functional requirements, business requirements, user requirements,
+                system requirements, and acceptance criteria.
+            """,
+            DocumentType.PROPOSAL: """
+                Project or solution proposals and bidding documents.
+                Contains proposed solutions, methodologies, implementation approaches,
+                team structure, pricing proposals, and company capabilities.
+            """,
+            DocumentType.CONTRACT: """
+                Legal contracts and agreements between parties.
+                Includes terms and conditions, service level agreements, 
+                contractual obligations, payment terms, and legal requirements.
+            """,
+            DocumentType.FINANCIAL: """
+                Financial documentation and pricing information.
+                Contains budgets, cost breakdowns, pricing schedules, payment terms,
+                financial projections, and cost estimates.
+            """,
+            DocumentType.LEGAL: """
+                Legal documentation and compliance requirements.
+                Includes legal terms, regulatory requirements, liability clauses,
+                intellectual property rights, and legal obligations.
+            """,
+            DocumentType.COMPLIANCE: """
+                Compliance documentation and regulatory requirements.
+                Contains compliance standards, regulatory frameworks, certification requirements,
+                audit requirements, and compliance procedures.
+            """,
+            DocumentType.EVALUATION_CRITERIA: """
+                Evaluation and assessment criteria documentation.
+                Includes scoring criteria, evaluation methodologies, assessment frameworks,
+                selection criteria, and performance metrics.
+            """,
+            DocumentType.TIMELINE: """
+                Project timeline and schedule documentation.
+                Contains project schedules, milestones, delivery timelines,
+                implementation phases, and project roadmaps.
+            """
+        }

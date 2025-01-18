@@ -12,7 +12,7 @@ from exceptions.custom_exceptions import PropertyExtractionError
 from models.enums import RelationType, Direction, RelationshipOutput, Properties
 
 class RelationshipManager:
-    """Manages relationship detection between financial document chunks"""
+    """Manages relationship detection between tender document chunks"""
     
     def __init__(self,
                  openai_api_key: str,
@@ -28,23 +28,57 @@ class RelationshipManager:
         self.embeddings = OpenAIEmbeddings(
             model="text-embedding-3-large"
         )
-        logger.info("RelationshipManager initialized successfully")
+        logger.info("TenderRelationshipManager initialized successfully")
 
     async def extract_properties(self, chunk: Chunk) -> Dict[str, Any]:
-        """Extract properties from a chunk using LLM"""
+        """Extract properties from a tender document chunk using LLM"""
         logger.debug(f"Extracting properties for chunk {chunk.chunk_id}")
 
-        system_template = """Analyze the following financial document text and extract key information into these categories:
-        - entities: Named entities (organizations, people, products)
-        - technical_terms: Technical or domain-specific terminology
-        - requirements: Explicit requirements or specifications
-        - dependencies: References to other components or systems
-        - dates: Any dates or time references
-        - monetary_values: Any financial figures or costs
-        - stakeholders: People or groups involved
-        - key_phrases: Important phrases or concepts
+        system_template = """Analyze the following tender document text and extract key information into these categories. Consider the document type context when extracting information.
 
-        Return ONLY items that are explicitly mentioned in the text. If a category has no items, return an empty list."""
+        Categories to extract:
+        - entities: Organizations, companies, departments, or individuals mentioned
+        - technical_terms: Industry-specific terminology, standards, or technical specifications
+        - requirements: 
+            * Mandatory requirements or specifications
+            * Minimum qualifications
+            * Compliance requirements
+            * Technical requirements
+            * Service level agreements
+        - dependencies: 
+            * Prerequisites or conditions
+            * Referenced documents or sections
+            * Sequential processes
+            * Approval dependencies
+        - dates: 
+            * Submission deadlines
+            * Project milestones
+            * Contract periods
+            * Implementation timelines
+        - monetary_values: 
+            * Budget allocations
+            * Cost estimates
+            * Financial requirements
+            * Pricing details
+        - stakeholders: 
+            * Decision makers
+            * Evaluators
+            * Required personnel
+            * Contact points
+        - key_phrases: 
+            * Critical success factors
+            * Evaluation criteria
+            * Strategic objectives
+            * Core deliverables
+
+        Important guidelines:
+        1. Extract ONLY explicitly mentioned items
+        2. Maintain the exact terminology used in the text
+        3. For each item, include any associated qualifiers or conditions
+        4. If a category has no explicit mentions, return an empty list
+        5. Pay special attention to mandatory requirements and dependencies
+
+        Consider how this chunk might relate to other tender documents when identifying key elements."""
 
         try:
             parser = PydanticOutputParser(pydantic_object=Properties)
@@ -68,36 +102,84 @@ class RelationshipManager:
                                   chunk1: Chunk,
                                   chunk2: Chunk,
                                   similarity: float) -> Tuple[RelationType, Direction, float]:
-        """Determine relationship between financial document chunks"""
+        """Determine relationship between tender document chunks"""
         logger.debug(f"Determining relationship between chunks {chunk1.chunk_id} and {chunk2.chunk_id}")
 
-        system_template = """Analyze the relationship between these financial document chunks and determine:
+        system_template = """Analyze the relationship between these tender document chunks and determine their connection. Consider the document types and context carefully.
 
-        - Relationship Type: Choose the most appropriate from the list below:
-            BUDGETS: Budget-related dependencies
-            DEPENDS_ON: Process/approval dependencies
-            EVALUATES: Evaluation criteria relationships
-            SCHEDULES: Timeline/scheduling relationships
-            COMPLEMENTS: Complementary information
-            AUTHORIZES: Authorization/approval relationships
-            FULFILLS: Requirement fulfillment
-            RELATES_TO: General relation
+        Relationship Types (Choose the most appropriate):
+        1. BUDGETS:
+           - Financial dependencies or implications
+           - Budget allocations and constraints
+           - Cost-related dependencies
 
-        - Direction: Choose one:
-            unidirectional: One chunk affects/influences the other
-            bidirectional: Both chunks affect/influence each other
+        2. DEPENDS_ON:
+           - Sequential process requirements
+           - Prerequisite conditions
+           - Technical dependencies
+           - Approval workflows
 
-        - Confidence: Provide a value between 0 and 1 indicating your confidence in this relationship.
+        3. EVALUATES:
+           - Assessment criteria relationships
+           - Scoring or rating connections
+           - Performance measurement links
+           - Quality assurance relationships
 
-        Consider the provided similarity score and properties when determining the relationship.
+        4. SCHEDULES:
+           - Timeline dependencies
+           - Milestone relationships
+           - Deadline connections
+           - Project phase linkages
 
+        5. COMPLEMENTS:
+           - Supporting information
+           - Additional details or clarifications
+           - Related specifications
+           - Supplementary requirements
+
+        6. AUTHORIZES:
+           - Approval relationships
+           - Sign-off requirements
+           - Permission dependencies
+           - Certification needs
+
+        7. FULFILLS:
+           - Requirement satisfaction
+           - Compliance demonstration
+           - Specification matching
+           - Deliverable completion
+
+        8. RELATES_TO:
+           - General topical connections
+           - Context relationships
+           - Reference links
+           - Informal associations
+
+        Direction Analysis:
+        - UNIDIRECTIONAL: One chunk directly influences or affects the other
+        - BIDIRECTIONAL: Both chunks have mutual influence or dependency
+
+        Confidence Scoring Factors:
+        - Explicit references between chunks
+        - Shared key terms or concepts
+        - Temporal or logical sequence
+        - Common stakeholders or requirements
+        - Similarity score context
+        - Document type relationship strength
+
+        Document Properties Context:
         Text 1 Properties: {chunk1_properties}
         Text 1: {text1}
 
         Text 2 Properties: {chunk2_properties}
         Text 2: {text2}
         
-        Similarity Score: {similarity}"""
+        Similarity Score: {similarity}
+
+        Return:
+        1. Most appropriate relationship type
+        2. Direction of influence
+        3. Confidence score (0-1) based on evidence strength"""
 
         try:
             parser = PydanticOutputParser(pydantic_object=RelationshipOutput)
@@ -115,7 +197,6 @@ class RelationshipManager:
                 "similarity": similarity
             })
 
-            # Convert string responses to enum values
             rel_type = RelationType[response.rel_type.strip().upper()]
             direction = Direction[response.direction.strip().upper()]
             confidence = float(response.confidence_score)
